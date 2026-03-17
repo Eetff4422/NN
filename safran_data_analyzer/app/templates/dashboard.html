@@ -7,33 +7,56 @@
 {% endblock %}
 
 {% block nav_extra %}
-    <button onclick="window.print()" class="btn btn-warning btn-sm fw-bold">📥 Exporter le Rapport (PDF)</button>
+    <button onclick="window.print()" class="btn btn-outline-safran btn-sm fw-bold rounded-pill px-3 me-2">
+        <i class="bi bi-printer me-1"></i>Imprimer
+    </button>
+    <button onclick="window.print()" class="btn btn-safran btn-sm fw-bold rounded-pill px-3 text-white">
+        <i class="bi bi-file-earmark-pdf me-1"></i>Exporter (PDF)
+    </button>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid px-4" id="dashboard-content">
+<div class="container-fluid px-0" id="dashboard-content">
     
     <div class="row mb-3 d-none d-print-block">
-        <div class="col-12">
-            <h2 class="text-primary border-bottom pb-2">Rapport d'Analyse de Production</h2>
-            <p class="text-muted">Généré le : <span id="date-generation"></span></p>
+        <div class="col-12 text-center border-bottom pb-3 mb-4">
+            <i class="bi bi-hexagon-fill text-safran fs-1 mb-2 d-inline-block"></i>
+            <h1 class="fw-bold text-dark">Rapport d'Analyse de Production</h1>
+            <p class="text-muted mb-0">Département Matériaux & Procédés - Généré le <span id="date-generation" class="fw-bold"></span></p>
         </div>
     </div>
 
+    <!-- Filtre & Contrôles -->
     <div class="row mb-4 data-nosnippet">
         <div class="col-12">
-            <div class="card shadow-sm border-0 bg-white">
-                <div class="card-body py-3">
+            <div class="card shadow-sm border-0 rounded-4">
+                <div class="card-body p-4 d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                    <div class="d-flex align-items-center mb-3 mb-md-0">
+                        <div class="bg-safran-light text-safran rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 48px; height: 48px;">
+                            <i class="bi bi-funnel-fill fs-5"></i>
+                        </div>
+                        <div>
+                            <h6 class="fw-bold text-dark mb-1">Filtrer les données</h6>
+                            <p class="text-muted small mb-0">Analysez une pièce spécifique ou l'ensemble de la production.</p>
+                        </div>
+                    </div>
+
                     <form method="GET" action="/dashboard" class="d-flex align-items-center">
-                        <label for="pieceFilter" class="me-3 fw-bold text-secondary">Filtrer par type de pièce :</label>
-                        <select name="piece" id="pieceFilter" class="form-select w-auto me-3 border-primary" onchange="this.form.submit()">
-                            <option value="Toutes" {% if selected_piece == 'Toutes' %}selected{% endif %}>Toutes les pièces confondues</option>
-                            {% for piece in pieces_uniques %}
-                                <option value="{{ piece }}" {% if selected_piece == piece %}selected{% endif %}>{{ piece }}</option>
-                            {% endfor %}
-                        </select>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-gear-wide-connected text-secondary"></i></span>
+                            <select name="piece" id="pieceFilter" class="form-select border-start-0 ps-0 fw-medium text-dark shadow-none" onchange="this.form.submit()" style="min-width: 250px;">
+                                <option value="Toutes" {% if selected_piece == 'Toutes' %}selected{% endif %}>Toutes pièces confondues</option>
+                                <optgroup label="Types de pièces">
+                                {% for piece in pieces_uniques %}
+                                    <option value="{{ piece }}" {% if selected_piece == piece %}selected{% endif %}>{{ piece }}</option>
+                                {% endfor %}
+                                </optgroup>
+                            </select>
+                        </div>
                         {% if selected_piece != 'Toutes' %}
-                            <span class="badge bg-primary rounded-pill px-3 py-2">Filtre actif : {{ selected_piece }}</span>
+                            <a href="/dashboard" class="btn btn-sm btn-outline-danger ms-2 rounded-circle" title="Effacer le filtre" style="width: 32px; height:32px; padding:0; display:flex; align-items:center; justify-content:center;">
+                                <i class="bi bi-x-lg"></i>
+                            </a>
                         {% endif %}
                     </form>
                 </div>
@@ -41,48 +64,107 @@
         </div>
     </div>
 
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card shadow-sm border-0 border-start border-primary border-4 h-100">
-                <div class="card-body py-3 d-flex flex-column justify-content-center">
-                    <h6 class="text-muted text-uppercase fw-bold mb-1">Pièces Analysées</h6>
-                    <h2 class="mb-0 text-dark">{{ total_pieces }}</h2>
+    <!-- KPIs -->
+    <div class="row g-4 mb-4">
+        <!-- KPI 1 -->
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 rounded-4 overflow-hidden h-100 position-relative kpi-card">
+                <div class="position-absolute top-0 start-0 w-100 bg-primary" style="height: 4px;"></div>
+                <div class="card-body p-4 d-flex align-items-center">
+                    <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 60px; height: 60px;">
+                        <i class="bi bi-box-seam fs-3"></i>
+                    </div>
+                    <div>
+                        <h6 class="text-muted fw-semibold text-uppercase mb-1" style="letter-spacing: 0.5px;">Volume Analysé</h6>
+                        <h2 class="mb-0 fw-bold text-dark">{{ total_pieces }} <span class="fs-6 text-muted fw-normal">unités</span></h2>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card shadow-sm border-0 border-start border-danger border-4 h-100">
-                <div class="card-body py-3 d-flex flex-column justify-content-center">
-                    <h6 class="text-muted text-uppercase fw-bold mb-1">Taux de Non-Conformité</h6>
-                    <h2 class="mb-0 {% if taux_rebut > 10 %}text-danger{% else %}text-success{% endif %}">
-                        {{ taux_rebut }} %
-                    </h2>
+
+        <!-- KPI 2 -->
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 rounded-4 overflow-hidden h-100 position-relative kpi-card">
+                <div class="position-absolute top-0 start-0 w-100 {% if taux_rebut > 10 %}bg-danger{% else %}bg-success{% endif %}" style="height: 4px;"></div>
+                <div class="card-body p-4 d-flex align-items-center">
+                    <div class="{% if taux_rebut > 10 %}bg-danger text-danger{% else %}bg-success text-success{% endif %} bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 60px; height: 60px;">
+                        <i class="bi {% if taux_rebut > 10 %}bi-exclamation-triangle-fill{% else %}bi-check-circle-fill{% endif %} fs-3"></i>
+                    </div>
+                    <div>
+                        <h6 class="text-muted fw-semibold text-uppercase mb-1" style="letter-spacing: 0.5px;">Taux de Rebut</h6>
+                        <div class="d-flex align-items-baseline">
+                            <h2 class="mb-0 fw-bold {% if taux_rebut > 10 %}text-danger{% else %}text-success{% endif %}">{{ taux_rebut }}%</h2>
+                            {% if taux_rebut > 10 %}
+                                <span class="badge bg-danger ms-2"><i class="bi bi-arrow-up-short"></i> Alerte</span>
+                            {% else %}
+                                <span class="badge bg-success ms-2">Nominal</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI 3 (Placeholder / Info contextuelle) -->
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 rounded-4 overflow-hidden h-100 bg-safran text-white position-relative pattern-bg">
+                <div class="card-body p-4 d-flex flex-column justify-content-center position-relative z-1">
+                    <h5 class="fw-bold mb-2">Contexte d'Analyse</h5>
+                    <p class="mb-0 opacity-75">
+                        {% if selected_piece == 'Toutes' %}
+                            Aperçu global de toutes les références de la ligne de production.
+                        {% else %}
+                            Analyse isolée pour la référence : <strong>{{ selected_piece }}</strong>.
+                        {% endif %}
+                    </p>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-md-4 mb-4">
-            <div class="card shadow-sm h-100 border-0"><div class="card-body p-1"><div id="graph1"></div></div></div>
+    <!-- Graphiques -->
+    <div class="row g-4">
+        <div class="col-lg-4 mb-4">
+            <div class="card shadow-sm h-100 border-0 rounded-4">
+                <div class="card-header bg-white border-0 pt-4 pb-0 px-4">
+                    <h6 class="fw-bold text-dark mb-0">Répartition Qualité</h6>
+                </div>
+                <div class="card-body p-2 d-flex align-items-center justify-content-center">
+                    <div id="graph1" class="w-100"></div>
+                </div>
+            </div>
         </div>
         
-        <div class="col-md-4 mb-4">
-            <div class="card shadow-sm h-100 border-0">
-                <div class="card-body p-1">
+        <div class="col-lg-4 mb-4">
+            <div class="card shadow-sm h-100 border-0 rounded-4">
+                <div class="card-header bg-white border-0 pt-4 pb-0 px-4">
+                    <h6 class="fw-bold text-dark mb-0">Top Défauts Rencontrés</h6>
+                </div>
+                <div class="card-body p-2 d-flex align-items-center justify-content-center">
                     {% if graph3JSON %}
-                        <div id="graph3"></div>
+                        <div id="graph3" class="w-100"></div>
                     {% else %}
-                        <div class="d-flex h-100 align-items-center justify-content-center flex-column text-center p-4">
-                            <h5 class="text-success fw-bold mb-3">✅ Aucun défaut détecté</h5>
+                        <div class="text-center p-4">
+                            <div class="bg-success-subtle text-success rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 80px; height: 80px;">
+                                <i class="bi bi-shield-check fs-1"></i>
+                            </div>
+                            <h5 class="text-success fw-bold">Zéro défaut</h5>
+                            <p class="text-muted small mb-0">Toutes les pièces de cette sélection sont conformes aux exigences.</p>
                         </div>
                     {% endif %}
                 </div>
             </div>
         </div>
 
-        <div class="col-md-4 mb-4">
-            <div class="card shadow-sm h-100 border-0"><div class="card-body p-1"><div id="graph2"></div></div></div>
+        <div class="col-lg-4 mb-4">
+            <div class="card shadow-sm h-100 border-0 rounded-4">
+                <div class="card-header bg-white border-0 pt-4 pb-0 px-4">
+                    <h6 class="fw-bold text-dark mb-0">Dispersion Thermique</h6>
+                </div>
+                <div class="card-body p-2 d-flex align-items-center justify-content-center">
+                    <div id="graph2" class="w-100"></div>
+                </div>
+            </div>
         </div>
     </div>
 </div>

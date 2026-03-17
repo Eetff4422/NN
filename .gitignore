@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+.env
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.DS_Store
+safran_data_analyzer/safran.db
+suivi_production_mock.xlsx

@@ -2,36 +2,60 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Vérification de sécurité</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vérification de sécurité | Portail Safran</title>
+    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body class="bg-light d-flex align-items-center" style="height: 100vh;">
+<body class="bg-body-tertiary d-flex align-items-center auth-page" style="min-height: 100vh;">
 
-<div class="container">
+<div class="container my-5">
     <div class="row justify-content-center">
-        <div class="col-md-5">
-            <div class="card shadow border-0 rounded-3">
-                <div class="card-body p-5">
-                    <h4 class="text-primary fw-bold text-center mb-4">Vérification d'identité</h4>
-                    
+        <div class="col-md-6 col-lg-5">
+            <div class="card shadow border-0 rounded-4 overflow-hidden">
+                <div class="bg-safran text-white p-4 text-center">
+                    <i class="bi bi-question-circle-fill fs-1 d-inline-block mb-2 text-white"></i>
+                    <h3 class="fw-bold mb-0">Vérification d'identité</h3>
+                    <p class="mb-0 opacity-75 small">Étape 2 : Question Secrète</p>
+                </div>
+                <div class="card-body p-4 p-md-5">
+
+                    <p class="text-muted text-center mb-4">Pour des raisons de sécurité, veuillez répondre à la question secrète définie lors de la création de votre compte.</p>
+
                     {% with messages = get_flashed_messages(with_categories=true) %}
                         {% if messages %}
                             {% for category, message in messages %}
-                                <div class="alert alert-{{ category }}">{{ message }}</div>
+                                <div class="alert alert-{{ category }} rounded-3 shadow-sm border-0 d-flex align-items-center" role="alert">
+                                    <i class="bi {% if category == 'success' %}bi-check-circle{% elif category == 'danger' %}bi-exclamation-octagon{% else %}bi-info-circle{% endif %} me-2"></i>
+                                    {{ message }}
+                                </div>
                             {% endfor %}
                         {% endif %}
                     {% endwith %}
 
                     <form method="POST">
                         <div class="mb-4">
-                            <label class="form-label text-muted">Votre question secrète :</label>
-                            <h5 class="fw-bold text-dark mb-3">"{{ question }}"</h5>
+                            <label class="form-label text-muted small text-uppercase fw-bold mb-2">Votre question secrète :</label>
+                            <div class="alert alert-light border shadow-sm rounded-3 py-3 px-4 mb-4">
+                                <h5 class="fw-bold text-dark mb-0 fst-italic">"{{ question }}"</h5>
+                            </div>
                             
-                            <label class="form-label fw-bold">Votre réponse :</label>
-                            <input type="text" name="secret_answer" class="form-control form-control-lg" required autofocus>
+                            <label class="form-label fw-bold text-dark small text-uppercase">Votre réponse :</label>
+                            <input type="text" name="secret_answer" class="form-control form-control-lg bg-light border-0" placeholder="Votre réponse" required autofocus>
                         </div>
-                        <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold">Valider la réponse</button>
+                        <button type="submit" class="btn btn-safran btn-lg w-100 fw-bold shadow-sm rounded-pill text-white mb-3">
+                            <i class="bi bi-check2-circle me-2"></i>Valider l'identité
+                        </button>
                     </form>
+                </div>
+                <div class="card-footer bg-light border-0 text-center py-4 rounded-bottom-4">
+                    <p class="mb-0 text-muted small"><i class="bi bi-arrow-left me-1"></i><a href="/login" class="fw-bold text-safran text-decoration-none ms-1">Retour à la connexion</a></p>
                 </div>
             </div>
         </div>

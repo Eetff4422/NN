@@ -2,9 +2,21 @@ import pandas as pd
 import plotly.express as px
 
 class ProductionAnalyzer:
-    """Le cerveau métier : analyse les données de production et génère les visuels."""
+    """
+    Le cerveau métier : analyse les données de production et génère les visuels.
+    Il standardise les colonnes et vérifie leur intégrité à l'initialisation.
+    """
     
     def __init__(self, df: pd.DataFrame):
+        """
+        Initialise l'analyseur de production.
+
+        Args:
+            df (pd.DataFrame): Le DataFrame contenant les données de production.
+
+        Raises:
+            ValueError: Si une colonne vitale est manquante dans le fichier fourni.
+        """
         # 1. STANDARDISATION DES COLONNES (Le remède anti-crash)
         # On remplace automatiquement les accents et caractères gênants
         df.columns = df.columns.str.replace('é', 'e').str.replace('è', 'e').str.replace(' ', '_')
@@ -19,12 +31,22 @@ class ProductionAnalyzer:
         self.pieces_uniques = df['Type_Piece'].dropna().unique().tolist()
 
     def apply_filter(self, selected_piece: str):
-        """Filtre les données si l'utilisateur a sélectionné une pièce spécifique."""
+        """
+        Filtre les données si l'utilisateur a sélectionné une pièce spécifique.
+
+        Args:
+            selected_piece (str): Le type de pièce sur lequel filtrer ('Toutes' pour désactiver le filtre).
+        """
         if selected_piece != 'Toutes':
             self.df = self.df[self.df['Type_Piece'] == selected_piece]
 
     def get_kpis(self) -> tuple:
-        """Calcule et renvoie les indicateurs clés (Total et Taux de rebut)."""
+        """
+        Calcule et renvoie les indicateurs clés (Total et Taux de rebut).
+
+        Returns:
+            tuple: Contient le nombre total de pièces et le taux de rebut (%).
+        """
         total_pieces = len(self.df)
         taux_rebut = 0
         if total_pieces > 0:
@@ -33,6 +55,14 @@ class ProductionAnalyzer:
         return total_pieces, taux_rebut
 
     def get_charts(self) -> tuple:
+        """
+        Génère les graphiques Plotly et les convertit en JSON pour le web.
+
+        Returns:
+            tuple: Les représentations JSON de graph1 (Camembert), graph2 (Boîte à moustaches),
+                   et graph3 (Barres pour les défauts, si applicable).
+        """
+        
         """Génère les 2 graphiques Plotly et les convertit en JSON pour le web."""
 
         # 1. Graphique Camembert (Taux de Conformité)
@@ -45,4 +75,16 @@ class ProductionAnalyzer:
                       title='Dispersion des Températures', points="all")
         graph2JSON = fig2.to_json()
 
-        return graph1JSON, graph2JSON
+        # # 3. Graphique en barres (Analyse des défauts - Uniquement si pièces NOK)
+        df_nok = self.df[self.df['Statut_Conformite'] == 'NOK']
+        graph3JSON = None
+        
+        if not df_nok.empty:
+            defauts_counts = df_nok['Type_Defaut'].value_counts().reset_index()
+            defauts_counts.columns = ['Défaut', 'Nombre']
+            fig3 = px.bar(defauts_counts, x='Défaut', y='Nombre',
+                          title='Analyse des types de défauts', text_auto=True,
+                          color='Nombre', color_continuous_scale='Reds')
+            graph3JSON = fig3.to_json()
+
+        return graph1JSON, graph2JSON, graph3JSON

@@ -6,13 +6,27 @@ from flask_login import current_user, login_user, logout_user, login_required
 from app.models import User, Report
 from app.extensions import db
 from itsdangerous import URLSafeTimedSerializer
+from werkzeug.utils import secure_filename
 
 def allowed_file(filename):
+    """
+    Vérifie si le fichier a une extension autorisée.
+
+    Args:
+        filename (str): Le nom du fichier à vérifier.
+
+    Returns:
+        bool: True si l'extension est autorisée, False sinon.
+    """
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 @app.route('/', methods=['GET', 'POST'])
 @login_required
 def index():
+    """
+    Page d'accueil de l'application. Affiche l'historique des rapports
+    et permet d'importer un nouveau fichier pour analyse.
+    """
     if request.method == 'POST':
         if 'file' not in request.files:
             flash("Aucun fichier n'a été envoyé.", "danger")
@@ -23,8 +37,8 @@ def index():
             flash("Aucun fichier sélectionné.", "warning")
             return redirect(request.url)
             
-        if file and ('.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']):
-            filename = file.filename
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
             
@@ -89,6 +103,9 @@ def load_history(report_id):
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    """
+    Gère la connexion des utilisateurs.
+    """
     # Si l'utilisateur est déjà connecté, on l'envoie sur l'accueil
     if current_user.is_authenticated:
         return redirect(url_for('index'))
@@ -113,6 +130,9 @@ def login():
 
 @app.route('/logout')
 def logout():
+    """
+    Déconnecte l'utilisateur actuel.
+    """
     logout_user()
     flash("Vous avez été déconnecté avec succès.", "info")
     return redirect(url_for('login'))
@@ -126,6 +146,9 @@ def make_session_permanent():
 # --- 2. INSCRIPTION SÉCURISÉE ---
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    """
+    Gère l'inscription de nouveaux utilisateurs.
+    """
     if current_user.is_authenticated:
         return redirect(url_for('index'))
 
@@ -136,10 +159,11 @@ def register():
         question = request.form.get('secret_question')
         answer = request.form.get('secret_answer')
 
-        # Règle Métier 1 : Vérification du domaine Safran
-        domaines_autorises = ['@safrangroup.com', '@safran.fr']
-        if not any(email.endswith(domaine) for domaine in domaines_autorises):
-            flash("Inscription refusée : Vous devez utiliser une adresse e-mail Safran valide.", "danger")
+        # Règle Métier 1 : Vérification du domaine
+        domaines_autorises = app.config.get('ALLOWED_DOMAINS', [])
+        if domaines_autorises and not any(email.endswith(domaine) for domaine in domaines_autorises):
+            domaines_str = " ou ".join(domaines_autorises)
+            flash(f"Inscription refusée : Vous devez utiliser une adresse e-mail valide ({domaines_str}).", "danger")
             return redirect(url_for('register'))
 
         # Règle Métier 2 : Unicité du compte
@@ -238,6 +262,9 @@ def set_new_password():
 @app.route('/dashboard')
 @login_required
 def dashboard():
+    """
+    Affiche le tableau de bord avec les résultats de l'analyse du fichier.
+    """
     filepath = session.get('filepath')
     
     if not filepath or not os.path.exists(filepath):
@@ -258,13 +285,13 @@ def dashboard():
         
         # Récupération des résultats calculés
         total_pieces, taux_rebut = analyzer.get_kpis()
-        graph1JSON, graph2JSON = analyzer.get_charts()
+        graph1JSON, graph2JSON, graph3JSON = analyzer.get_charts()
         
         # 3. AFFICHAGE : On envoie tout ça à la page HTML
         return render_template('dashboard.html', 
                                graph1JSON=graph1JSON, 
                                graph2JSON=graph2JSON,
-                               graph3JSON=None,
+                               graph3JSON=graph3JSON,
                                total_pieces=total_pieces,
                                taux_rebut=taux_rebut,
                                pieces_uniques=analyzer.pieces_uniques,
