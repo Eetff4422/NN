@@ -239,6 +239,7 @@ def api_upload():
                 original_filename=original_filename,
                 stored_filename=stored_filename,
                 row_count=len(analyzer.df),
+                anomaly_count=len(analyzer.anomalies_list),
                 column_snapshot=json.dumps(list(analyzer.df.columns)),
                 graphs_json=json.dumps(analysis_results)
             )
@@ -288,7 +289,8 @@ def api_dashboard_data():
         data["metadata"] = {
             "filename": rapport.original_filename,
             "date": rapport.uploaded_at.strftime('%d/%m/%Y'),
-            "rows": rapport.row_count
+            "rows": rapport.row_count,
+            "anomaly_count": rapport.anomaly_count
         }
         return jsonify({"success": True, "data": data}), 200
     except json.JSONDecodeError:

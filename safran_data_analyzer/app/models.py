@@ -48,6 +48,7 @@ class Report(db.Model):
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
     status = db.Column(db.String(50), nullable=False, default="success")
     row_count = db.Column(db.Integer, nullable=True)
+    anomaly_count = db.Column(db.Integer, nullable=True, default=0)
     column_snapshot = db.Column(db.Text, nullable=True) # Stocké sous forme de string JSON
     graphs_json = db.Column(db.Text, nullable=True)     # Stocké sous forme de string JSON
 
