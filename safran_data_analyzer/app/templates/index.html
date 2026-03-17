@@ -16,18 +16,21 @@
                     <p class="text-muted">Importez un fichier Excel de suivi de production pour générer les KPIs et graphiques interactifs.</p>
                 </div>
 
-                <form action="/" method="POST" enctype="multipart/form-data" class="w-100">
+                <form id="uploadForm" enctype="multipart/form-data" class="w-100 position-relative">
                     <div class="file-upload-wrapper position-relative mb-4">
-                        <input class="form-control form-control-lg stretched-link file-input" type="file" id="formFile" name="file" accept=".xlsx, .xls" required style="opacity: 0; position: absolute; top:0; left:0; width:100%; height:100%; cursor:pointer; z-index:2;">
+                        <input class="form-control form-control-lg stretched-link file-input" type="file" id="formFile" name="file" accept=".xlsx" required style="opacity: 0; position: absolute; top:0; left:0; width:100%; height:100%; cursor:pointer; z-index:2;">
                         <div class="border border-2 border-dashed border-primary rounded-4 p-4 bg-light file-upload-visual d-flex flex-column align-items-center justify-content-center" style="transition: all 0.2s ease;">
                             <i class="bi bi-file-earmark-excel fs-3 text-secondary mb-2"></i>
                             <span class="fw-semibold text-primary d-block mb-1">Cliquez ou glissez-déposez</span>
-                            <small class="text-muted">Fichiers .xlsx ou .xls acceptés (Max 16Mo)</small>
+                            <small class="text-muted">Fichiers .xlsx acceptés (Max 10Mo)</small>
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-safran btn-lg w-100 fw-bold shadow-sm rounded-pill text-white">
-                        <i class="bi bi-magic me-2"></i>Analyser les données
+                    <button type="submit" id="btnUpload" class="btn btn-safran btn-lg w-100 fw-bold shadow-sm rounded-pill text-white position-relative">
+                        <span id="btnText"><i class="bi bi-magic me-2"></i>Analyser les données</span>
+                        <span id="btnSpinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
                     </button>
+                    <!-- Zone d'erreur Upload (cachée par défaut) -->
+                    <div id="uploadError" class="alert alert-danger mt-3 d-none text-start small p-2" role="alert"></div>
                 </form>
             </div>
         </div>
@@ -42,9 +45,9 @@
             </div>
             <div class="card-body p-0">
                 {% if historique %}
-                    <div class="table-responsive">
+                    <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
                         <table class="table table-hover align-middle mb-0 custom-table">
-                            <thead class="table-light text-muted small text-uppercase">
+                            <thead class="table-light text-muted small text-uppercase sticky-top z-1">
                                 <tr>
                                     <th class="ps-4 fw-semibold border-0">Date d'import</th>
                                     <th class="fw-semibold border-0">Fichier source</th>
@@ -57,11 +60,11 @@
                                     <td class="ps-4 text-secondary">
                                         <div class="d-flex align-items-center">
                                             <i class="bi bi-calendar-event me-2"></i>
-                                            <span>{{ rapport.upload_date.strftime('%d/%m/%Y') }} <br><small>{{ rapport.upload_date.strftime('%H:%M') }}</small></span>
+                                            <span>{{ rapport.uploaded_at.strftime('%d/%m/%Y') }} <br><small>{{ rapport.uploaded_at.strftime('%H:%M') }}</small></span>
                                         </div>
                                     </td>
-                                    <td class="fw-medium text-dark">
-                                        <i class="bi bi-file-earmark-spreadsheet text-success me-2"></i>{{ rapport.filename }}
+                                    <td class="fw-medium text-dark text-truncate" style="max-width: 200px;" title="{{ rapport.original_filename }}">
+                                        <i class="bi bi-file-earmark-spreadsheet text-success me-2"></i>{{ rapport.original_filename }}
                                     </td>
                                     <td class="text-end pe-4">
                                         <div class="d-flex justify-content-end gap-2">
@@ -119,6 +122,54 @@
             dropZone.classList.add('border-success', 'bg-success-subtle');
             dropZone.classList.remove('border-primary', 'bg-light');
         }
+    });
+
+    // Requête AJAX Fetch pour l'upload (évite de recharger et gère les erreurs proprement)
+    document.getElementById('uploadForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const btnUpload = document.getElementById('btnUpload');
+        const btnText = document.getElementById('btnText');
+        const btnSpinner = document.getElementById('btnSpinner');
+        const errorDiv = document.getElementById('uploadError');
+
+        // État de chargement
+        btnUpload.disabled = true;
+        btnText.innerHTML = "Traitement en cours...";
+        btnSpinner.classList.remove('d-none');
+        errorDiv.classList.add('d-none');
+
+        const formData = new FormData(this);
+
+        fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if(data.success) {
+                window.location.href = data.redirect_url; // Redirection vers le dashboard vide (qui fera un fetch AJAX)
+            } else {
+                // Erreur fonctionnelle
+                errorDiv.innerHTML = `<i class="bi bi-exclamation-triangle me-1"></i> ${data.error}`;
+                errorDiv.classList.remove('d-none');
+
+                // Reset bouton
+                btnUpload.disabled = false;
+                btnText.innerHTML = `<i class="bi bi-magic me-2"></i>Analyser les données`;
+                btnSpinner.classList.add('d-none');
+            }
+        })
+        .catch(error => {
+            // Erreur réseau critique (500, etc.)
+            errorDiv.innerHTML = `<i class="bi bi-wifi-off me-1"></i> Erreur réseau ou fichier trop volumineux (Max 10Mo).`;
+            errorDiv.classList.remove('d-none');
+
+            // Reset bouton
+            btnUpload.disabled = false;
+            btnText.innerHTML = `<i class="bi bi-magic me-2"></i>Analyser les données`;
+            btnSpinner.classList.add('d-none');
+        });
     });
 </script>
 {% endblock %}

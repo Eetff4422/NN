@@ -1,68 +1,36 @@
+"""Définition des classes de lecture de données (BaseReader, ExcelReader, Factory)."""
 import pandas as pd
 from abc import ABC, abstractmethod
 
 class BaseReader(ABC):
-    """
-    Classe abstraite parent : définit le moule (interface) pour tous les futurs lecteurs
-    de données.
-    """
+    """Classe abstraite parent : définit le moule (interface) pour tous les futurs lecteurs."""
     
     @abstractmethod
     def read(self, filepath: str) -> pd.DataFrame:
-        """
-        Lit un fichier et le convertit en DataFrame pandas.
-
-        Args:
-            filepath (str): Le chemin absolu ou relatif vers le fichier à lire.
-
-        Returns:
-            pd.DataFrame: Les données extraites du fichier.
-        """
+        """Lit un fichier et le convertit en DataFrame pandas."""
         pass
 
 class ExcelReader(BaseReader):
-    """
-    Classe enfant : Spécialiste de la lecture des fichiers Excel (.xls, .xlsx).
-    """
+    """Classe enfant : Spécialiste de la lecture des fichiers Excel (.xlsx)."""
+
+    def _verify_magic_bytes(self, filepath: str) -> bool:
+        """Vérifie que les 4 premiers octets correspondent bien à un zip (PK\x03\x04)."""
+        with open(filepath, 'rb') as f:
+            magic_bytes = f.read(4)
+        return magic_bytes == b'PK\x03\x04'
     
     def read(self, filepath: str) -> pd.DataFrame:
-        """
-        Lit un fichier Excel et le convertit en DataFrame pandas.
-
-        Args:
-            filepath (str): Le chemin absolu ou relatif vers le fichier Excel.
-
-        Returns:
-            pd.DataFrame: Les données extraites du fichier Excel.
-        """
+        """Lit un fichier Excel et le convertit en DataFrame pandas après sécurité."""
+        if not self._verify_magic_bytes(filepath):
+            raise ValueError("Le fichier ne semble pas être un véritable document Excel (Magic Bytes invalides).")
         return pd.read_excel(filepath)
 
-# Vous pourrez ajouter plus tard :
-# class CSVReader(BaseReader): ...
-# class SQLReader(BaseReader): ...
-
 class ReaderFactory:
-    """
-    Factory de création de lecteurs : distribue le bon lecteur selon l'extension
-    du fichier fourni.
-    """
+    """Factory de création de lecteurs selon l'extension."""
     
     @staticmethod
     def get_reader(filename: str) -> BaseReader:
-        """
-        Détermine et renvoie la bonne instance de lecteur de données (BaseReader).
-
-        Args:
-            filename (str): Le nom du fichier ou chemin pour vérifier l'extension.
-
-        Returns:
-            BaseReader: L'instance de lecteur appropriée (e.g. ExcelReader).
-
-        Raises:
-            ValueError: Si le format du fichier n'est pas pris en charge.
-        """
-        if filename.endswith(('.xlsx', '.xls')):
+        """Renvoie l'instance de lecteur de données (ExcelReader)."""
+        if filename.endswith('.xlsx'):
             return ExcelReader()
-        # elif filename.endswith('.csv'): return CSVReader()
-        else:
-            raise ValueError(f"Format de fichier non pris en charge pour : {filename}")
+        raise ValueError(f"Format de fichier non pris en charge pour : {filename}")
