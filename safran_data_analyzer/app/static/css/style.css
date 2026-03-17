@@ -1,0 +1,130 @@
+/* ==========================================================================
+   Variables Globales & Typographie
+   ========================================================================== */
+   :root {
+    --safran-primary: #00305E;   /* Bleu Safran foncé */
+    --safran-secondary: #0070B9; /* Bleu clair d'accentuation */
+    --safran-light: #E6F0F8;     /* Fond bleuté léger */
+    --gray-bg: #F8F9FA;
+    --text-dark: #212529;
+    --text-muted: #6C757D;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--text-dark);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ==========================================================================
+   Utilitaires Personnalisés (Surcharge Bootstrap)
+   ========================================================================== */
+.text-safran { color: var(--safran-primary) !important; }
+.bg-safran { background-color: var(--safran-primary) !important; }
+.bg-safran-light { background-color: var(--safran-light) !important; }
+
+.btn-safran {
+    background-color: var(--safran-primary);
+    border-color: var(--safran-primary);
+}
+.btn-safran:hover, .btn-safran:focus {
+    background-color: var(--safran-secondary);
+    border-color: var(--safran-secondary);
+    color: white;
+}
+
+.btn-outline-safran {
+    color: var(--safran-primary);
+    border-color: var(--safran-primary);
+}
+.btn-outline-safran:hover {
+    background-color: var(--safran-primary);
+    color: white;
+}
+
+.border-safran { border-color: var(--safran-primary) !important; }
+
+/* ==========================================================================
+   Composants UI
+   ========================================================================== */
+
+/* Layout et Sidebar */
+.sidebar .nav-link {
+    color: var(--text-muted);
+    font-weight: 500;
+    transition: all 0.2s ease-in-out;
+}
+.sidebar .nav-link:hover {
+    background-color: var(--gray-bg);
+    color: var(--safran-primary);
+}
+.sidebar .nav-link.active {
+    background-color: var(--safran-light);
+    color: var(--safran-primary);
+    font-weight: 600;
+}
+
+/* Auth Pages Background */
+.auth-page {
+    background: linear-gradient(135deg, var(--gray-bg) 0%, #e9ecef 100%);
+}
+
+/* Focus sur les inputs */
+.focus-ring-group:focus-within {
+    border-color: var(--safran-secondary) !important;
+    box-shadow: 0 0 0 0.25rem rgba(0, 112, 185, 0.25);
+}
+
+/* Custom Table (Historique) */
+.custom-table tbody tr {
+    transition: background-color 0.2s ease;
+}
+.custom-table tbody tr:hover {
+    background-color: var(--safran-light);
+}
+.custom-hover-btn {
+    opacity: 0.7;
+    transition: all 0.2s ease;
+}
+.custom-table tbody tr:hover .custom-hover-btn {
+    opacity: 1;
+    background-color: white !important;
+    box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075) !important;
+}
+
+/* Drag & Drop Visuals */
+.border-dashed {
+    border-style: dashed !important;
+}
+.file-upload-visual {
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* KPI Cards sur le Dashboard */
+.kpi-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.kpi-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Motif de fond décoratif */
+.pattern-bg {
+    background-image: radial-gradient(circle at 100% 100%, rgba(255,255,255,0.1) 0%, transparent 50%),
+                      radial-gradient(circle at 0% 0%, rgba(255,255,255,0.05) 0%, transparent 30%);
+}
+
+/* ==========================================================================
+   Impression (Rapport PDF)
+   ========================================================================== */
+@media print {
+    body { background-color: white !important; }
+    .sidebar, .navbar, .data-nosnippet { display: none !important; }
+    main { padding: 0 !important; overflow: visible !important; }
+    .card { box-shadow: none !important; border: 1px solid #dee2e6 !important; margin-bottom: 2rem !important; page-break-inside: avoid; }
+    .kpi-card { border: 1px solid #dee2e6 !important; }
+    .bg-safran { color: #000 !important; background-color: #f8f9fa !important; border: 1px solid #dee2e6 !important; }
+    .bg-safran .text-white { color: #000 !important; }
+    @page { size: A4 landscape; margin: 1cm; }
+}

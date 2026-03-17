@@ -161,10 +161,11 @@ def register():
         question = request.form.get('secret_question')
         answer = request.form.get('secret_answer')
 
-        # Règle Métier 1 : Vérification du domaine Safran
-        domaines_autorises = ['@safrangroup.com', '@safran.fr']
-        if not any(email.endswith(domaine) for domaine in domaines_autorises):
-            flash("Inscription refusée : Vous devez utiliser une adresse e-mail Safran valide.", "danger")
+        # Règle Métier 1 : Vérification du domaine
+        domaines_autorises = app.config.get('ALLOWED_DOMAINS', [])
+        if domaines_autorises and not any(email.endswith(domaine) for domaine in domaines_autorises):
+            domaines_str = " ou ".join(domaines_autorises)
+            flash(f"Inscription refusée : Vous devez utiliser une adresse e-mail valide ({domaines_str}).", "danger")
             return redirect(url_for('register'))
 
         # Règle Métier 2 : Unicité du compte

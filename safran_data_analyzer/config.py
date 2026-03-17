@@ -22,3 +22,6 @@ class Config:
     
     # NOUVEAU : Expiration de la session après 15 minutes d'inactivité
     PERMANENT_SESSION_LIFETIME = timedelta(minutes=15)
+
+    # NOUVEAU : Domaines e-mail autorisés pour l'inscription (Configuration Générique)
+    ALLOWED_DOMAINS = ['@safrangroup.com', '@safran.fr']
