@@ -1,164 +1,75 @@
+"""Définition des contrôleurs Flask (routes web et API)."""
 import os
-from flask import render_template, request, flash, redirect, url_for, session, current_app as app
+import uuid
+import json
+from datetime import datetime, timedelta
+from flask import render_template, request, flash, redirect, url_for, session, current_app as app, jsonify
+from werkzeug.utils import secure_filename
+from flask_login import current_user, login_user, logout_user, login_required
+from itsdangerous import URLSafeTimedSerializer
+
+from app.extensions import db
+from app.models import User, Report, LoginAttempt
 from app.services.readers import ReaderFactory
 from app.services.analyzer import ProductionAnalyzer
-from flask_login import current_user, login_user, logout_user, login_required
-from app.models import User, Report
-from app.extensions import db
-from itsdangerous import URLSafeTimedSerializer
-from werkzeug.utils import secure_filename
 
 def allowed_file(filename):
-    """
-    Vérifie si le fichier a une extension autorisée.
-
-    Args:
-        filename (str): Le nom du fichier à vérifier.
-
-    Returns:
-        bool: True si l'extension est autorisée, False sinon.
-    """
+    """Vérifie si l'extension du fichier est autorisée."""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
-@app.route('/', methods=['GET', 'POST'])
-@login_required
-def index():
-    """
-    Page d'accueil de l'application. Affiche l'historique des rapports
-    et permet d'importer un nouveau fichier pour analyse.
-    """
-    if request.method == 'POST':
-        if 'file' not in request.files:
-            flash("Aucun fichier n'a été envoyé.", "danger")
-            return redirect(request.url)
-            
-        file = request.files['file']
-        if file.filename == '':
-            flash("Aucun fichier sélectionné.", "warning")
-            return redirect(request.url)
-            
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
-            
-            # --- LE CRASH TEST AVANT SAUVEGARDE EN BASE DE DONNÉES ---
-            try:
-                # 1. On tente de lire le fichier
-                reader = ReaderFactory.get_reader(filepath)
-                df = reader.read(filepath)
-                
-                # 2. On tente de l'analyser (C'est ici que l'erreur de colonne sera détectée)
-                ProductionAnalyzer(df)
-                
-                # 3. SI ET SEULEMENT SI aucune erreur n'a éclaté, on sauvegarde dans l'historique !
-                nouveau_rapport = Report(filename=filename, filepath=filepath, author=current_user)
-                db.session.add(nouveau_rapport)
-                db.session.commit()
-                
-                session['filepath'] = filepath
-                session['filename'] = filename
-                
-                return redirect(url_for('dashboard'))
-                
-            except Exception as e:
-                # ÉCHEC DU CRASH TEST : Le fichier est mauvais
-                if os.path.exists(filepath):
-                    os.remove(filepath) # On nettoie le serveur en supprimant le mauvais fichier
-                
-                flash(f"Fichier rejeté (Format invalide) : {str(e)}", "danger")
-                return redirect(request.url)
-            # ---------------------------------------------------------
-            
-        else:
-            flash("Format non autorisé.", "danger")
-            return redirect(request.url)
-
-    # Récupération de l'historique de l'utilisateur (trié du plus récent au plus ancien)
-    historique = Report.query.filter_by(user_id=current_user.id).order_by(Report.upload_date.desc()).all()
-
-    return render_template('index.html', historique=historique)
-
-@app.route('/load_history/<int:report_id>')
-@login_required
-def load_history(report_id):
-    """Charge un ancien fichier depuis la base de données."""
-    rapport = Report.query.get_or_404(report_id)
+def _check_bruteforce(ip_address, email=None):
+    """Vérifie si l'utilisateur a dépassé 5 tentatives en 10 minutes."""
+    ten_mins_ago = datetime.utcnow() - timedelta(minutes=10)
+    query = LoginAttempt.query.filter(
+        LoginAttempt.timestamp >= ten_mins_ago,
+        LoginAttempt.success == False
+    )
     
-    # Sécurité : Vérifier que l'utilisateur n'essaie pas d'ouvrir le rapport d'un collègue
-    if rapport.user_id != current_user.id:
-        flash("Accès refusé : Ce rapport ne vous appartient pas.", "danger")
-        return redirect(url_for('index'))
+    if email:
+        attempts = query.filter((LoginAttempt.ip_address == ip_address) | (LoginAttempt.email_attempted == email)).count()
+    else:
+        attempts = query.filter(LoginAttempt.ip_address == ip_address).count()
         
-    # Vérifier que le fichier physique n'a pas été supprimé du serveur entre-temps
-    if not os.path.exists(rapport.filepath):
-        flash("Le fichier source de cette analyse a été supprimé du serveur.", "warning")
-        # Optionnel : nettoyer la base de données si le fichier n'existe plus
-        db.session.delete(rapport)
-        db.session.commit()
-        return redirect(url_for('index'))
+    return attempts >= 5
 
-    # On remet le fichier en session et on lance le dashboard
-    session['filepath'] = rapport.filepath
-    session['filename'] = rapport.filename
-    return redirect(url_for('dashboard'))
+def _log_attempt(ip_address, email, success):
+    """Enregistre une tentative de connexion."""
+    attempt = LoginAttempt(ip_address=ip_address, email_attempted=email, success=success)
+    db.session.add(attempt)
+    db.session.commit()
 
-@app.route('/delete_history/<int:report_id>', methods=['POST'])
-@login_required
-def delete_history(report_id):
-    """
-    Supprime un rapport d'analyse de l'historique de l'utilisateur
-    et efface le fichier physique du serveur pour libérer de l'espace.
-    """
-    rapport = Report.query.get_or_404(report_id)
+@app.before_request
+def make_session_permanent():
+    """Renouvelle la session."""
+    session.permanent = True
 
-    # Sécurité : Vérifier que l'utilisateur n'essaie pas de supprimer le rapport d'un collègue
-    if rapport.user_id != current_user.id:
-        flash("Accès refusé : Ce rapport ne vous appartient pas.", "danger")
-        return redirect(url_for('index'))
-
-    try:
-        # 1. Suppression physique du fichier s'il existe encore
-        if os.path.exists(rapport.filepath):
-            os.remove(rapport.filepath)
-
-        # 2. Suppression de la session courante si c'est le fichier en cours d'analyse
-        if session.get('filepath') == rapport.filepath:
-            session.pop('filepath', None)
-            session.pop('filename', None)
-
-        # 3. Suppression en base de données
-        db.session.delete(rapport)
-        db.session.commit()
-
-        flash(f"L'analyse '{rapport.filename}' a été supprimée avec succès.", "success")
-
-    except Exception as e:
-        flash(f"Erreur lors de la suppression : {str(e)}", "danger")
-
-    return redirect(url_for('index'))
+# ==========================================
+# ROUTES D'AUTHENTIFICATION
+# ==========================================
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """
-    Gère la connexion des utilisateurs.
-    """
-    # Si l'utilisateur est déjà connecté, on l'envoie sur l'accueil
+    """Gère la connexion et protège contre le bruteforce."""
     if current_user.is_authenticated:
         return redirect(url_for('index'))
 
     if request.method == 'POST':
+        ip_address = request.remote_addr
         username = request.form.get('username')
         password = request.form.get('password')
         
         user = User.query.filter_by(username=username).first()
+        email = user.email if user else username
         
-        # Vérification des identifiants
+        if _check_bruteforce(ip_address, email):
+            return "Trop de tentatives échouées. Compte bloqué pour 15 minutes.", 429
+
         if user is None or not user.check_password(password):
+            _log_attempt(ip_address, email, False)
             flash("Identifiant ou mot de passe invalide.", "danger")
             return redirect(url_for('login'))
             
-        # Création de la session sécurisée
+        _log_attempt(ip_address, email, True)
         login_user(user)
         flash(f"Bienvenue, {user.username} !", "success")
         return redirect(url_for('index'))
@@ -167,27 +78,18 @@ def login():
 
 @app.route('/logout')
 def logout():
-    """
-    Déconnecte l'utilisateur actuel.
-    """
+    """Déconnecte l'utilisateur."""
     logout_user()
     flash("Vous avez été déconnecté avec succès.", "info")
     return redirect(url_for('login'))
 
-# --- 1. GESTION DES 15 MINUTES D'INACTIVITÉ ---
-@app.before_request
-def make_session_permanent():
-    """Réinitialise le chrono de 15 minutes à chaque fois que l'utilisateur clique quelque part."""
-    session.permanent = True
-
-# --- 2. INSCRIPTION SÉCURISÉE ---
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    """
-    Gère l'inscription de nouveaux utilisateurs.
-    """
+    """Gère l'inscription avec contraintes métier."""
     if current_user.is_authenticated:
         return redirect(url_for('index'))
+
+    questions = app.config.get('SECURITY_QUESTIONS', [])
 
     if request.method == 'POST':
         username = request.form.get('username')
@@ -196,19 +98,20 @@ def register():
         question = request.form.get('secret_question')
         answer = request.form.get('secret_answer')
 
-        # Règle Métier 1 : Vérification du domaine
         domaines_autorises = app.config.get('ALLOWED_DOMAINS', [])
         if domaines_autorises and not any(email.endswith(domaine) for domaine in domaines_autorises):
             domaines_str = " ou ".join(domaines_autorises)
             flash(f"Inscription refusée : Vous devez utiliser une adresse e-mail valide ({domaines_str}).", "danger")
             return redirect(url_for('register'))
 
-        # Règle Métier 2 : Unicité du compte
         if User.query.filter_by(email=email).first() or User.query.filter_by(username=username).first():
             flash("Un compte existe déjà avec cet e-mail ou cet identifiant.", "warning")
             return redirect(url_for('register'))
 
-        # Création du compte
+        if question not in questions:
+            flash("Question de sécurité invalide.", "danger")
+            return redirect(url_for('register'))
+
         new_user = User(username=username, email=email, secret_question=question)
         new_user.set_password(password)
         new_user.set_secret_answer(answer)
@@ -219,33 +122,25 @@ def register():
         flash("Compte créé avec succès ! Vous pouvez maintenant vous connecter.", "success")
         return redirect(url_for('login'))
 
-    return render_template('register.html')
-
-# --- 3. RÉCUPÉRATION DE MOT DE PASSE ---
-def generate_reset_token(user_email):
-    """Génère un jeton crypté valable 30 minutes."""
-    serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
-    return serializer.dumps(user_email, salt='recuperation-mdp')
+    return render_template('register.html', questions=questions)
 
 @app.route('/forgot_password', methods=['GET', 'POST'])
 def forgot_password():
-    """Étape 1 : Demande de réinitialisation."""
+    """Demande de réinitialisation de mot de passe."""
     if request.method == 'POST':
         email = request.form.get('email').lower()
         user = User.query.filter_by(email=email).first()
         
         if user:
-            token = generate_reset_token(user.email)
+            serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+            token = serializer.dumps(user.email, salt='recuperation-mdp')
             reset_url = url_for('reset_password_question', token=token, _external=True)
             
-            # SIMULATION D'ENVOI D'E-MAIL (Puisque nous n'avons pas de vrai serveur SMTP configuré)
             print("\n" + "="*50)
             print(f"📧 E-MAIL ENVOYÉ À : {user.email}")
-            print(f"Sujet: Récupération de votre mot de passe Safran")
             print(f"Lien de réinitialisation : {reset_url}")
             print("="*50 + "\n")
             
-        # Par sécurité, on affiche toujours le même message (pour empêcher les pirates de deviner quels e-mails existent)
         flash("Si cette adresse existe, un e-mail avec un lien de récupération vient d'être envoyé.", "info")
         return redirect(url_for('login'))
 
@@ -253,22 +148,22 @@ def forgot_password():
 
 @app.route('/reset_password/<token>', methods=['GET', 'POST'])
 def reset_password_question(token):
-    """Étape 2 : Le lien de l'e-mail amène ici. On pose la question secrète."""
+    """Vérification de la question secrète."""
     serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
     try:
-        # Le jeton expire après 1800 secondes (30 minutes)
         email = serializer.loads(token, salt='recuperation-mdp', max_age=1800)
     except:
         flash("Le lien de récupération est invalide ou a expiré.", "danger")
         return redirect(url_for('forgot_password'))
 
     user = User.query.filter_by(email=email).first()
+    if not user:
+        flash("Erreur lors de la récupération.", "danger")
+        return redirect(url_for('login'))
 
     if request.method == 'POST':
         answer = request.form.get('secret_answer')
-        
         if user.check_secret_answer(answer):
-            # Réponse correcte : on l'autorise à changer le mot de passe
             session['reset_authorized_for'] = user.email
             return redirect(url_for('set_new_password'))
         else:
@@ -278,7 +173,7 @@ def reset_password_question(token):
 
 @app.route('/set_new_password', methods=['GET', 'POST'])
 def set_new_password():
-    """Étape 3 : Changement du mot de passe."""
+    """Définition du nouveau mot de passe."""
     if 'reset_authorized_for' not in session:
         return redirect(url_for('login'))
 
@@ -289,52 +184,152 @@ def set_new_password():
         user.set_password(new_password)
         db.session.commit()
         
-        # On nettoie l'autorisation
         session.pop('reset_authorized_for', None)
         flash("Votre mot de passe a été modifié avec succès.", "success")
         return redirect(url_for('login'))
 
     return render_template('set_new_password.html')
 
+# ==========================================
+# ROUTES APPLICATION (AJAX)
+# ==========================================
+
+@app.route('/', methods=['GET'])
+@login_required
+def index():
+    """Page d'accueil."""
+    historique = Report.query.filter_by(user_id=current_user.id).order_by(Report.uploaded_at.desc()).all()
+    return render_template('index.html', historique=historique)
+
+@app.route('/api/upload', methods=['POST'])
+@login_required
+def api_upload():
+    """Endpoint AJAX pour uploader et analyser un fichier."""
+    if 'file' not in request.files:
+        return jsonify({"success": False, "error": "Aucun fichier n'a été envoyé."}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"success": False, "error": "Aucun fichier sélectionné."}), 400
+
+    # Vérification MIME type pour plus de sécurité
+    if file.content_type not in ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel']:
+        return jsonify({"success": False, "error": "Format MIME invalide."}), 400
+
+    if file and allowed_file(file.filename):
+        original_filename = secure_filename(file.filename)
+        # Nommage UUID+timestamp
+        ext = original_filename.rsplit('.', 1)[1].lower()
+        stored_filename = f"{uuid.uuid4().hex}_{int(datetime.utcnow().timestamp())}.{ext}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], stored_filename)
+
+        file.save(filepath)
+
+        # Crash Test
+        try:
+            reader = ReaderFactory.get_reader(filepath)
+            df = reader.read(filepath)
+
+            analyzer = ProductionAnalyzer(df)
+            analysis_results = analyzer.analyze() # Retourne {kpis: {}, charts: {}}
+
+            # Sauvegarde en base
+            nouveau_rapport = Report(
+                user_id=current_user.id,
+                original_filename=original_filename,
+                stored_filename=stored_filename,
+                row_count=len(analyzer.df),
+                column_snapshot=json.dumps(list(analyzer.df.columns)),
+                graphs_json=json.dumps(analysis_results)
+            )
+            db.session.add(nouveau_rapport)
+            db.session.commit()
+
+            session['active_report_id'] = nouveau_rapport.id
+
+            return jsonify({"success": True, "redirect_url": url_for('dashboard')}), 200
+
+        except Exception as e:
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            return jsonify({"success": False, "error": str(e)}), 400
+
+    return jsonify({"success": False, "error": "Format non autorisé."}), 400
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    """
-    Affiche le tableau de bord avec les résultats de l'analyse du fichier.
-    """
-    filepath = session.get('filepath')
-    
-    if not filepath or not os.path.exists(filepath):
-        flash("Veuillez d'abord importer un fichier.", "warning")
+    """Affiche la coquille vide du dashboard."""
+    report_id = session.get('active_report_id')
+    if not report_id:
+        flash("Veuillez d'abord importer un fichier ou sélectionner un historique.", "warning")
         return redirect(url_for('index'))
+    return render_template('dashboard.html')
+
+@app.route('/api/dashboard_data')
+@login_required
+def api_dashboard_data():
+    """Endpoint AJAX pour récupérer les données du dashboard."""
+    report_id = session.get('active_report_id')
+    if not report_id:
+        return jsonify({"success": False, "error": "Aucun rapport actif."}), 400
+        
+    rapport = Report.query.get(report_id)
+    if not rapport or rapport.user_id != current_user.id:
+        return jsonify({"success": False, "error": "Rapport introuvable ou accès refusé."}), 404
+        
+    # Les données ont été précalculées au moment de l'upload et stockées en JSON
+    if not rapport.graphs_json:
+         return jsonify({"success": False, "error": "Données d'analyse corrompues."}), 500
 
     try:
-        # 1. LECTURE : On demande à l'usine (Factory) de lire le fichier
-        reader = ReaderFactory.get_reader(filepath)
-        df = reader.read(filepath)
+        data = json.loads(rapport.graphs_json)
+        # Add metadata
+        data["metadata"] = {
+            "filename": rapport.original_filename,
+            "date": rapport.uploaded_at.strftime('%d/%m/%Y'),
+            "rows": rapport.row_count
+        }
+        return jsonify({"success": True, "data": data}), 200
+    except json.JSONDecodeError:
+        return jsonify({"success": False, "error": "Erreur de lecture des données (JSONDecodeError)."}), 500
+
+@app.route('/load_history/<int:report_id>')
+@login_required
+def load_history(report_id):
+    """Charge un ancien fichier depuis la base de données."""
+    rapport = Report.query.get_or_404(report_id)
+    if rapport.user_id != current_user.id:
+        flash("Accès refusé : Ce rapport ne vous appartient pas.", "danger")
+        return redirect(url_for('index'))
         
-        # 2. ANALYSE : On donne les données à notre nouveau cerveau métier
-        analyzer = ProductionAnalyzer(df)
+    # L'avantage ici c'est qu'on a même plus besoin que le fichier physique existe
+    # Les JSON sont en base de données.
+    session['active_report_id'] = rapport.id
+    return redirect(url_for('dashboard'))
+
+@app.route('/delete_history/<int:report_id>', methods=['POST'])
+@login_required
+def delete_history(report_id):
+    """Supprime un rapport d'analyse."""
+    rapport = Report.query.get_or_404(report_id)
+    if rapport.user_id != current_user.id:
+        flash("Accès refusé : Ce rapport ne vous appartient pas.", "danger")
+        return redirect(url_for('index'))
         
-        # Gestion du filtre (choisi par l'utilisateur sur la page web)
-        selected_piece = request.args.get('piece', 'Toutes')
-        analyzer.apply_filter(selected_piece)
-        
-        # Récupération des résultats calculés
-        total_pieces, taux_rebut = analyzer.get_kpis()
-        graph1JSON, graph2JSON, graph3JSON = analyzer.get_charts()
-        
-        # 3. AFFICHAGE : On envoie tout ça à la page HTML
-        return render_template('dashboard.html', 
-                               graph1JSON=graph1JSON, 
-                               graph2JSON=graph2JSON,
-                               graph3JSON=graph3JSON,
-                               total_pieces=total_pieces,
-                               taux_rebut=taux_rebut,
-                               pieces_uniques=analyzer.pieces_uniques,
-                               selected_piece=selected_piece)
+    try:
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], rapport.stored_filename)
+        if os.path.exists(filepath):
+            os.remove(filepath)
+
+        if session.get('active_report_id') == rapport.id:
+            session.pop('active_report_id', None)
+
+        db.session.delete(rapport)
+        db.session.commit()
+        flash(f"L'analyse a été supprimée avec succès.", "success")
         
     except Exception as e:
-        # Si un fichier corrompu passe les sécurités, l'erreur est interceptée proprement ici
-        flash(f"Erreur lors de l'analyse : {str(e)}", "danger")
-        return redirect(url_for('index'))
+        flash(f"Erreur lors de la suppression : {str(e)}", "danger")
+
+    return redirect(url_for('index'))

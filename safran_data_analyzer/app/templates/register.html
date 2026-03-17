@@ -59,7 +59,12 @@
 
                         <div class="mb-3">
                             <label class="form-label fw-bold text-dark small text-uppercase">Question secrète de récupération</label>
-                            <input type="text" name="secret_question" class="form-control form-control-lg bg-light border-0" placeholder="Ex: Nom de mon premier chien ?" required>
+                            <select name="secret_question" class="form-select form-control-lg bg-light border-0" required>
+                                <option value="" disabled selected>Sélectionnez une question...</option>
+                                {% for q in questions %}
+                                    <option value="{{ q }}">{{ q }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
                         <div class="mb-4">
                             <label class="form-label fw-bold text-dark small text-uppercase">Votre réponse</label>

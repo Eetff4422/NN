@@ -2,26 +2,33 @@ import os
 from datetime import timedelta
 
 class Config:
-    """Configuration globale de l'application."""
-    # Clé secrète pour les sessions Flask
-    SECRET_KEY = "safran_tech_dir_secret"
+    """Configuration centralisée de l'application Safran Data Analyzer."""
     
-    # Chemin absolu vers le dossier d'upload
+    SECRET_KEY = os.environ.get("SECRET_KEY", "safran_tech_dir_secret")
     BASE_DIR = os.path.abspath(os.path.dirname(__file__))
     UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
     
-    # Limite de poids du fichier conservée (16 Mo)
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024
+    # Stockage fichiers : répertoire uploads/, 10 Mo max
+    MAX_CONTENT_LENGTH = 10 * 1024 * 1024
     
-    # Extensions autorisées (facile à modifier plus tard)
-    ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
+    # Extensions autorisées
+    ALLOWED_EXTENSIONS = {'xlsx'}
 
-    # NOUVEAU : Configuration de la base de données SQLite
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(BASE_DIR, 'safran.db')
+    # Base de données : SQLite en dev (data/app.db), PostgreSQL en prod (DATABASE_URL)
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///' + os.path.join(BASE_DIR, '../data/app.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
-    # NOUVEAU : Expiration de la session après 15 minutes d'inactivité
+    # Session : expiration 15 min
     PERMANENT_SESSION_LIFETIME = timedelta(minutes=15)
 
-    # NOUVEAU : Domaines e-mail autorisés pour l'inscription (Configuration Générique)
+    # Domaines autorisés dans config.py
     ALLOWED_DOMAINS = ['@safrangroup.com', '@safran.fr']
+
+    # Question secrète : liste prédéfinie
+    SECURITY_QUESTIONS = [
+        "Quel est le nom de votre premier animal de compagnie ?",
+        "Dans quelle ville êtes-vous né(e) ?",
+        "Quel est le nom de jeune fille de votre mère ?",
+        "Quel était le modèle de votre première voiture ?",
+        "Quel est le nom de votre école primaire ?"
+    ]
