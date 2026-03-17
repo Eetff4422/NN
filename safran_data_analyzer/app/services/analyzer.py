@@ -63,8 +63,6 @@ class ProductionAnalyzer:
                    et graph3 (Barres pour les défauts, si applicable).
         """
         
-        """Génère les 2 graphiques Plotly et les convertit en JSON pour le web."""
-
         # 1. Graphique Camembert (Taux de Conformité)
         fig1 = px.pie(self.df, names='Statut_Conformite', title='Taux de Conformité',
                       color='Statut_Conformite', color_discrete_map={'OK':'#28a745', 'NOK':'#dc3545'}, hole=0.4)

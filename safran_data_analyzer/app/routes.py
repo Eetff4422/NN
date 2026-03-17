@@ -74,7 +74,9 @@ def index():
             flash("Format non autorisé.", "danger")
             return redirect(request.url)
 
+    # Récupération de l'historique de l'utilisateur (trié du plus récent au plus ancien)
     historique = Report.query.filter_by(user_id=current_user.id).order_by(Report.upload_date.desc()).all()
+
     return render_template('index.html', historique=historique)
 
 @app.route('/load_history/<int:report_id>')
@@ -100,6 +102,41 @@ def load_history(report_id):
     session['filepath'] = rapport.filepath
     session['filename'] = rapport.filename
     return redirect(url_for('dashboard'))
+
+@app.route('/delete_history/<int:report_id>', methods=['POST'])
+@login_required
+def delete_history(report_id):
+    """
+    Supprime un rapport d'analyse de l'historique de l'utilisateur
+    et efface le fichier physique du serveur pour libérer de l'espace.
+    """
+    rapport = Report.query.get_or_404(report_id)
+
+    # Sécurité : Vérifier que l'utilisateur n'essaie pas de supprimer le rapport d'un collègue
+    if rapport.user_id != current_user.id:
+        flash("Accès refusé : Ce rapport ne vous appartient pas.", "danger")
+        return redirect(url_for('index'))
+
+    try:
+        # 1. Suppression physique du fichier s'il existe encore
+        if os.path.exists(rapport.filepath):
+            os.remove(rapport.filepath)
+
+        # 2. Suppression de la session courante si c'est le fichier en cours d'analyse
+        if session.get('filepath') == rapport.filepath:
+            session.pop('filepath', None)
+            session.pop('filename', None)
+
+        # 3. Suppression en base de données
+        db.session.delete(rapport)
+        db.session.commit()
+
+        flash(f"L'analyse '{rapport.filename}' a été supprimée avec succès.", "success")
+
+    except Exception as e:
+        flash(f"Erreur lors de la suppression : {str(e)}", "danger")
+
+    return redirect(url_for('index'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
