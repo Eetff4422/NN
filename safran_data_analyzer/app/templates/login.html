@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Connexion - Portail Safran</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light d-flex align-items-center" style="height: 100vh;">
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-5">
+            <div class="card shadow border-0 rounded-3">
+                <div class="card-body p-5">
+                    <div class="text-center mb-4">
+                        <h3 class="text-primary fw-bold">Direction Technique</h3>
+                        <p class="text-muted">Analyse de Production</p>
+                    </div>
+
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+
+                    <form method="POST" action="/login">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Identifiant (Trigramme)</label>
+                            <input type="text" name="username" class="form-control form-control-lg" required autofocus>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Mot de passe</label>
+                            <input type="password" name="password" class="form-control form-control-lg" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold">Se connecter</button>
+                        <div class="text-center mt-3">
+    <a href="/forgot_password" class="text-decoration-none text-muted small">Mot de passe oublié ?</a>
+    <br>
+    <a href="/register" class="text-decoration-none fw-bold mt-2 d-inline-block">Demander un accès (Inscription)</a>
+</div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

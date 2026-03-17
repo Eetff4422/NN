@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Accueil - Portail Safran{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-white border-bottom-0 pt-4 pb-0">
+                    <h5 class="text-primary fw-bold">Nouvelle Analyse</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-4">Importez un nouveau fichier de suivi de production (.xlsx, .xls) pour générer les graphiques.</p>
+                    <form action="/" method="POST" enctype="multipart/form-data">
+                        <div class="mb-4">
+                            <input class="form-control" type="file" name="file" accept=".xlsx, .xls" required>
+                        </div>
+                        <button class="btn btn-primary w-100 fw-bold" type="submit">Analyser les données</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8 mb-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-white border-bottom-0 pt-4 pb-0 d-flex justify-content-between align-items-center">
+                    <h5 class="text-secondary fw-bold">Vos Analyses Précédentes</h5>
+                    <span class="badge bg-light text-secondary border">{{ historique|length }} rapport(s)</span>
+                </div>
+                <div class="card-body">
+                    {% if historique %}
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light text-muted small">
+                                    <tr>
+                                        <th>Date d'importation</th>
+                                        <th>Nom du fichier source</th>
+                                        <th class="text-end">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for rapport in historique %}
+                                    <tr>
+                                        <td>{{ rapport.upload_date.strftime('%d/%m/%Y à %H:%M') }}</td>
+                                        <td class="text-truncate" style="max-width: 250px;" title="{{ rapport.filename }}">
+                                            <span class="text-primary">📄 {{ rapport.filename }}</span>
+                                        </td>
+                                        <td class="text-end">
+                                            <a href="{{ url_for('load_history', report_id=rapport.id) }}" class="btn btn-sm btn-outline-primary">
+                                                Ouvrir le rapport
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center text-muted py-5">
+                            <p class="mb-0">Vous n'avez pas encore d'historique.</p>
+                            <small>Importez votre premier fichier pour commencer.</small>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

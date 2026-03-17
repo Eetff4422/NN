@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Production Safran{% endblock %}
+
+{% block head_scripts %}
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+{% endblock %}
+
+{% block nav_extra %}
+    <button onclick="window.print()" class="btn btn-warning btn-sm fw-bold">📥 Exporter le Rapport (PDF)</button>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4" id="dashboard-content">
+    
+    <div class="row mb-3 d-none d-print-block">
+        <div class="col-12">
+            <h2 class="text-primary border-bottom pb-2">Rapport d'Analyse de Production</h2>
+            <p class="text-muted">Généré le : <span id="date-generation"></span></p>
+        </div>
+    </div>
+
+    <div class="row mb-4 data-nosnippet">
+        <div class="col-12">
+            <div class="card shadow-sm border-0 bg-white">
+                <div class="card-body py-3">
+                    <form method="GET" action="/dashboard" class="d-flex align-items-center">
+                        <label for="pieceFilter" class="me-3 fw-bold text-secondary">Filtrer par type de pièce :</label>
+                        <select name="piece" id="pieceFilter" class="form-select w-auto me-3 border-primary" onchange="this.form.submit()">
+                            <option value="Toutes" {% if selected_piece == 'Toutes' %}selected{% endif %}>Toutes les pièces confondues</option>
+                            {% for piece in pieces_uniques %}
+                                <option value="{{ piece }}" {% if selected_piece == piece %}selected{% endif %}>{{ piece }}</option>
+                            {% endfor %}
+                        </select>
+                        {% if selected_piece != 'Toutes' %}
+                            <span class="badge bg-primary rounded-pill px-3 py-2">Filtre actif : {{ selected_piece }}</span>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 border-start border-primary border-4 h-100">
+                <div class="card-body py-3 d-flex flex-column justify-content-center">
+                    <h6 class="text-muted text-uppercase fw-bold mb-1">Pièces Analysées</h6>
+                    <h2 class="mb-0 text-dark">{{ total_pieces }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 border-start border-danger border-4 h-100">
+                <div class="card-body py-3 d-flex flex-column justify-content-center">
+                    <h6 class="text-muted text-uppercase fw-bold mb-1">Taux de Non-Conformité</h6>
+                    <h2 class="mb-0 {% if taux_rebut > 10 %}text-danger{% else %}text-success{% endif %}">
+                        {{ taux_rebut }} %
+                    </h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm h-100 border-0"><div class="card-body p-1"><div id="graph1"></div></div></div>
+        </div>
+        
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm h-100 border-0">
+                <div class="card-body p-1">
+                    {% if graph3JSON %}
+                        <div id="graph3"></div>
+                    {% else %}
+                        <div class="d-flex h-100 align-items-center justify-content-center flex-column text-center p-4">
+                            <h5 class="text-success fw-bold mb-3">✅ Aucun défaut détecté</h5>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm h-100 border-0"><div class="card-body p-1"><div id="graph2"></div></div></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    var config = {responsive: true, displayModeBar: false};
+    Plotly.newPlot('graph1', {{ graph1JSON | safe }}.data, {{ graph1JSON | safe }}.layout, config);
+    Plotly.newPlot('graph2', {{ graph2JSON | safe }}.data, {{ graph2JSON | safe }}.layout, config);
+    {% if graph3JSON %}
+    Plotly.newPlot('graph3', {{ graph3JSON | safe }}.data, {{ graph3JSON | safe }}.layout, config);
+    {% endif %}
+
+    document.getElementById('date-generation').innerText = new Date().toLocaleDateString('fr-FR');
+</script>
+{% endblock %}
