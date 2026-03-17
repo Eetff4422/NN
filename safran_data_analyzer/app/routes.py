@@ -63,11 +63,6 @@ def index():
     historique = Report.query.filter_by(user_id=current_user.id).order_by(Report.upload_date.desc()).all()
     return render_template('index.html', historique=historique)
 
-    # NOUVEAU : Récupération de l'historique de l'utilisateur (trié du plus récent au plus ancien)
-    historique = Report.query.filter_by(user_id=current_user.id).order_by(Report.upload_date.desc()).all()
-    
-    return render_template('index.html', historique=historique)
-
 @app.route('/load_history/<int:report_id>')
 @login_required
 def load_history(report_id):
