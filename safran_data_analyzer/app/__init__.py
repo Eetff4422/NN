@@ -22,15 +22,27 @@ def create_app():
     with app.app_context():
         from . import routes
         from . import models
-        from sqlalchemy.exc import OperationalError
-        try:
-            # On vérifie si la colonne anomaly_count existe, si elle n'existe pas, on modifie ou on drop la DB
-            app.logger.info("Vérification des tables de la base de données...")
-            models.Report.query.limit(1).all()
-        except OperationalError as e:
-            if "no such column: report.anomaly_count" in str(e):
-                app.logger.warning("La colonne 'anomaly_count' est manquante. Suppression et recréation de la base de données pour appliquer la mise à jour...")
-                db.drop_all()
         db.create_all()
+
+        from sqlalchemy import text
+        from sqlalchemy.exc import OperationalError
+
+        # Ajout manuel de la colonne 'anomaly_count' si elle manque dans une DB existante (migration brute)
+        try:
+            app.logger.info("Vérification de la présence de la colonne 'anomaly_count'...")
+            db.session.execute(text("SELECT anomaly_count FROM report LIMIT 1"))
+        except OperationalError as e:
+            if "no such column" in str(e).lower():
+                app.logger.warning("Colonne 'anomaly_count' manquante dans 'report'. Ajout de la colonne...")
+                db.session.rollback() # Important: faire un rollback de l'erreur précédente
+                try:
+                    db.session.execute(text("ALTER TABLE report ADD COLUMN anomaly_count INTEGER DEFAULT 0"))
+                    db.session.commit()
+                    app.logger.info("Colonne 'anomaly_count' ajoutée avec succès.")
+                except Exception as ex:
+                    app.logger.error(f"Erreur lors de l'ajout de la colonne: {ex}")
+                    db.session.rollback()
+            else:
+                 db.session.rollback() # Rollback si c'est une autre erreur
 
     return app
