@@ -33,8 +33,8 @@ class ProductionAnalyzer:
         return total_pieces, taux_rebut
 
     def get_charts(self) -> tuple:
-        """Génère les 3 graphiques Plotly et les convertit en JSON pour le web."""
-        
+        """Génère les 2 graphiques Plotly et les convertit en JSON pour le web."""
+
         # 1. Graphique Camembert (Taux de Conformité)
         fig1 = px.pie(self.df, names='Statut_Conformite', title='Taux de Conformité',
                       color='Statut_Conformite', color_discrete_map={'OK':'#28a745', 'NOK':'#dc3545'}, hole=0.4)
@@ -44,17 +44,5 @@ class ProductionAnalyzer:
         fig2 = px.box(self.df, x='Type_Piece', y='Temperature_Forgeage_C', color='Type_Piece',
                       title='Dispersion des Températures', points="all")
         graph2JSON = fig2.to_json()
-
-        # # 3. Graphique en barres (Analyse des défauts - Uniquement si pièces NOK)
-        # df_nok = self.df[self.df['Statut_Conformite'] == 'NOK']
-        # graph3JSON = None
-        
-        # if not df_nok.empty:
-        #     defauts_counts = df_nok['Type_Defaut'].value_counts().reset_index()
-        #     defauts_counts.columns = ['Défaut', 'Nombre']
-        #     fig3 = px.bar(defauts_counts, x='Défaut', y='Nombre', 
-        #                   title='Analyse des types de défauts', text_auto=True, 
-        #                   color='Nombre', color_continuous_scale='Reds')
-        #     graph3JSON = fig3.to_json()
 
         return graph1JSON, graph2JSON
