@@ -5,6 +5,17 @@ import plotly.express as px
 import plotly.graph_objects as go
 import json
 import unidecode
+import logging
+
+# Configuration du logger interne
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
 
 EXPECTED_COLUMNS = {
     "piece_id"              : {"label": "Identifiant pièce",         "type": "str",      "required": True},
@@ -24,6 +35,7 @@ class ProductionAnalyzer:
 
     def __init__(self, df: pd.DataFrame):
         """Standardise les colonnes et vérifie leur intégrité selon le dictionnaire de référence."""
+        self.anomalies_list = []
         self.df = self._standardize_columns(df)
         self._verify_and_clean_data()
 
@@ -53,7 +65,20 @@ class ProductionAnalyzer:
         if missing:
             raise ValueError(f"Colonnes obligatoires manquantes dans l'Excel : {', '.join(missing)}")
 
-        # Casting types
+        initial_len = len(self.df)
+
+        # 1. Suppression des lignes entièrement vides
+        self.df.dropna(how='all', inplace=True)
+        if len(self.df) < initial_len:
+            logger.info(f"Suppression de {initial_len - len(self.df)} lignes entièrement vides.")
+
+        # 2. Suppression des doublons
+        initial_len = len(self.df)
+        self.df.drop_duplicates(inplace=True)
+        if len(self.df) < initial_len:
+            logger.info(f"Suppression de {initial_len - len(self.df)} lignes en double.")
+
+        # 3. Casting types et gestion des valeurs manquantes sur champs requis
         for col, config in EXPECTED_COLUMNS.items():
             if col in self.df.columns:
                 if config["type"] == "datetime":
@@ -61,13 +86,42 @@ class ProductionAnalyzer:
                 elif config["type"] == "float":
                     self.df[col] = pd.to_numeric(self.df[col], errors='coerce')
                 else:
-                    self.df[col] = self.df[col].astype(str)
+                    self.df[col] = self.df[col].astype(str).replace('nan', np.nan)
 
-        # Filtre de cohérence des dates
-        self.df = self.df.dropna(subset=['date_debut', 'date_fin'])
+                # Suppression si colonne requise et valeur manquante
+                if config["required"]:
+                    initial_len = len(self.df)
+                    self.df.dropna(subset=[col], inplace=True)
+                    if len(self.df) < initial_len:
+                        logger.info(f"Suppression de {initial_len - len(self.df)} lignes pour cause de {col} manquant ou invalide.")
+
+        # 4. Normalisation catégorielle pour statut_conformite
+        valid_statuts = {"conforme", "non-conforme", "en attente"}
+        initial_len = len(self.df)
+        # On passe en minuscules, on strip, et on mappe vers le format attendu
+        self.df['statut_conformite_clean'] = self.df['statut_conformite'].str.strip().str.lower()
+        self.df = self.df[self.df['statut_conformite_clean'].isin(valid_statuts)].copy()
+
+        # Mappage pour avoir une casse propre
+        statut_map = {
+            "conforme": "Conforme",
+            "non-conforme": "Non-conforme",
+            "en attente": "En attente"
+        }
+        self.df['statut_conformite'] = self.df['statut_conformite_clean'].map(statut_map)
+        self.df.drop(columns=['statut_conformite_clean'], inplace=True)
+        if len(self.df) < initial_len:
+            logger.info(f"Suppression de {initial_len - len(self.df)} lignes pour cause de statut_conformite non conforme au référentiel.")
+
+
+        # 5. Filtre de cohérence des dates
+        initial_len = len(self.df)
         self.df = self.df[self.df['date_fin'] > self.df['date_debut']].copy()
+        if len(self.df) < initial_len:
+             logger.info(f"Suppression de {initial_len - len(self.df)} lignes pour cause d'incohérence temporelle (date_fin <= date_debut).")
 
-        # Filtre sur températures (Si renseignées, alors dans [800, 1300])
+        # 6. Filtre sur températures : Si renseignées, on s'assure qu'elles soient valides,
+        # Ici on traite les NaN en remplaçant les mauvaises valeurs par NaN silencieusement
         if 'temperature_c' in self.df.columns:
             mask = self.df['temperature_c'].notna()
             self.df.loc[mask, 'temperature_c'] = self.df.loc[mask, 'temperature_c'].apply(
@@ -80,8 +134,53 @@ class ProductionAnalyzer:
         self.df = self.df[self.df['temps_reel_min'] > 0].copy()
         self.df['performance_pct'] = (self.df['temps_prevu_min'] / self.df['temps_reel_min']) * 100
 
+        # Détection d'anomalies sur les données numériques continues isolées dans self.anomalies_list
+        self._detect_anomalies()
+
+    def _detect_anomalies(self):
+        """Isole les données aberrantes dans self.anomalies_list via la méthode de l'IQR."""
+        anomalies_df = pd.DataFrame()
+
+        cols_to_check = ['temps_prevu_min', 'temps_reel_min', 'temperature_c', 'performance_pct']
+
+        for col in cols_to_check:
+            if col in self.df.columns:
+                Q1 = self.df[col].quantile(0.25)
+                Q3 = self.df[col].quantile(0.75)
+                IQR = Q3 - Q1
+                lower_bound = Q1 - 1.5 * IQR
+                upper_bound = Q3 + 1.5 * IQR
+
+                # Isoler les lignes aberrantes pour cette colonne
+                outliers = self.df[(self.df[col] < lower_bound) | (self.df[col] > upper_bound)].copy()
+                if not outliers.empty:
+                    # Ajouter une colonne 'anomaly_reason' pour indiquer la raison de l'anomalie
+                    outliers['anomaly_reason'] = outliers[col].apply(
+                        lambda x: f"Valeur aberrante sur {col} ({round(x,2)} hors de [{round(lower_bound,2)}, {round(upper_bound,2)}])"
+                    )
+
+                    if anomalies_df.empty:
+                        anomalies_df = outliers
+                    else:
+                        anomalies_df = pd.concat([anomalies_df, outliers])
+
+        if not anomalies_df.empty:
+            # On déduplique au cas où une ligne est aberrante sur plusieurs colonnes
+            anomalies_df = anomalies_df[~anomalies_df.index.duplicated(keep='first')]
+
+            # Formatage des dates pour le JSON
+            for col in ['date_debut', 'date_fin']:
+                if col in anomalies_df.columns:
+                    anomalies_df[col] = anomalies_df[col].astype(str)
+
+            # On remplace les NaN par None pour le JSON
+            anomalies_df = anomalies_df.replace({np.nan: None})
+
+            self.anomalies_list = anomalies_df.to_dict(orient='records')
+            logger.info(f"Détection de {len(self.anomalies_list)} anomalies.")
+
     def analyze(self) -> dict:
-        """Exécute l'analyse et retourne le JSON contenant les KPIs et les graphiques (format imposé routes)."""
+        """Exécute l'analyse et retourne le JSON contenant les KPIs, les graphiques et les anomalies."""
         if self.df.empty:
              raise ValueError("Le fichier de données est vide après le nettoyage des dates invalides.")
         kpis = self._compute_kpis()
@@ -89,7 +188,8 @@ class ProductionAnalyzer:
         
         return {
             "kpis": kpis,
-            "charts": charts
+            "charts": charts,
+            "anomalies": self.anomalies_list
         }
 
     def _compute_kpis(self) -> dict:
