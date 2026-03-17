@@ -22,6 +22,15 @@ def create_app():
     with app.app_context():
         from . import routes
         from . import models
+        from sqlalchemy.exc import OperationalError
+        try:
+            # On vérifie si la colonne anomaly_count existe, si elle n'existe pas, on modifie ou on drop la DB
+            app.logger.info("Vérification des tables de la base de données...")
+            models.Report.query.limit(1).all()
+        except OperationalError as e:
+            if "no such column: report.anomaly_count" in str(e):
+                app.logger.warning("La colonne 'anomaly_count' est manquante. Suppression et recréation de la base de données pour appliquer la mise à jour...")
+                db.drop_all()
         db.create_all()
 
     return app
