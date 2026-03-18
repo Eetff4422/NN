@@ -289,8 +289,8 @@ class ProductionAnalyzer:
         fig4.add_trace(go.Scatter(x=df_weekly.index, y=df_weekly['Taux_Rebut'], name="Taux de Rebut (%)", mode='lines+markers', line=dict(color='red')))
         fig4.add_trace(go.Scatter(x=df_weekly.index, y=df_weekly['Perf'], name="Performance Moy (%)", mode='lines+markers', yaxis='y2', line=dict(color='green')))
         fig4.update_layout(title="Évolution Hebdomadaire (Rebut & Performance)", xaxis_title="Semaine",
-                           yaxis=dict(title="Taux de Rebut (%)", titlefont=dict(color="red"), tickfont=dict(color="red")),
-                           yaxis2=dict(title="Performance (%)", titlefont=dict(color="green"), tickfont=dict(color="green"), overlaying="y", side="right"))
+                           yaxis=dict(title=dict(text="Taux de Rebut (%)", font=dict(color="red")), tickfont=dict(color="red")),
+                           yaxis2=dict(title=dict(text="Performance (%)", font=dict(color="green")), tickfont=dict(color="green"), overlaying="y", side="right"))
         charts["graph4"] = json.loads(fig4.to_json())
 
         # Graphique 5: Heatmap Perf x Étape x Semaine
