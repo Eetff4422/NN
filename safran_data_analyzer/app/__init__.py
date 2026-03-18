@@ -24,4 +24,13 @@ def create_app():
         from . import models
         db.create_all()
 
+        # Update schema if anomaly_count column is missing (SQLite specific or via SQLAlchemy inspection)
+        from sqlalchemy import inspect, text
+        inspector = inspect(db.engine)
+        if 'report' in inspector.get_table_names():
+            columns = [col['name'] for col in inspector.get_columns('report')]
+            if 'anomaly_count' not in columns:
+                with db.engine.begin() as conn:
+                    conn.execute(text('ALTER TABLE report ADD COLUMN anomaly_count INTEGER DEFAULT 0'))
+
     return app
